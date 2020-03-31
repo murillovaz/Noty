@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Noty.SqlServer
+namespace Noty
 {
     public static class DataReader
     {
@@ -18,16 +18,6 @@ namespace Noty.SqlServer
 
             return (T)objectValue;
         }
-        public static async Task<T> MapDataToObject<T>(this SqlDataReader dataReader)
-        {
-            return await MapDataToObject<T, SqlDataReader>(dataReader);
-        }
-
-        public static async Task<IEnumerable<T>> MapDataToObjectCollection<T>(this SqlDataReader dataReader)
-        {
-            return await MapDataToObjectCollection<T, SqlDataReader>(dataReader);
-        }
-
 
         public static async Task<T> MapDataToObject<T, T2>(this T2 dataReader) where T2 : DbDataReader
         {

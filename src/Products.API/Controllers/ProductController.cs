@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Noty;
 using Noty.MySql;
 using Noty.SqlServer;
@@ -26,12 +27,17 @@ namespace Products.API.Controllers
         [HttpGet]
         public async Task<IActionResult> Get()
         {
-            //var valueScalar = await _ctx.ExecuteScalar<decimal>("SELECT TOP 1 Price FROM Products");
+            var valuesSqlServerNonQuery = await _ctx.ExecuteStoredProcedureNonQuery("Products_Insert", 
+                "name".WithValue("Banana Nanica"),
+                "price".WithValue(100.00)
+                );
 
-            var valuesSqlServer = await _ctx.ExecuteStoredProcedureCollectionReader<Product>("Products_Get", "@id".WithValue(1));
+            var valuesSqlServer = await _ctx.ExecuteStoredProcedureCollectionReader<Product>("Products_Get", 
+                "@id".WithValue(1));
+
             var valuesMySql = await _ctxMysql.ExecuteStoredProcedureCollectionReader<Product>("Products_Get", "v_id".WithValue(1));
 
-            return Ok(new { valuesMySql = valuesMySql, valuesSqlServer = valuesSqlServer });
+            return Ok(JsonConvert.SerializeObject(new { valuesMySql = valuesMySql, valuesSqlServer = valuesSqlServer, valuesSqlServerNonQuery = valuesSqlServerNonQuery }, Formatting.Indented));
         }
     }
 }

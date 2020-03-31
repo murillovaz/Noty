@@ -21,7 +21,7 @@ namespace Products.API
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddMySqlContext("Server=localhost;Database=Dev;Uid=root;Pwd=root;");
+            services.AddMySqlContext("Server=localhost;Database=dev;Uid=root;Pwd=root;");
             services.AddSqlServerContext("Server=localhost;Database=Dev;User Id=sa;Password=Mumu(#)12345;");
             services.AddControllers();
         }

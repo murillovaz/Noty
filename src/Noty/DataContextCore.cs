@@ -1,5 +1,6 @@
 ﻿using Noty.Interfaces;
 using Noty.SqlServer;
+using Polly.Wrap;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -9,122 +10,161 @@ using System.Threading.Tasks;
 
 namespace Noty
 {
-    public class DataContextCore<TCommand, TConnection, TDataReader>  where TCommand : DbCommand where TConnection : DbConnection where TDataReader : DbDataReader
+    public class DataContextCore<TCommand, TConnection, TDataReader> where TCommand : DbCommand where TConnection : DbConnection where TDataReader : DbDataReader
     {
-        private readonly string ConnectionString;
+        private readonly string _connectionString;
+
+        private readonly IContextConfiguration _config;
+
 
         public DataContextCore(string connectionString)
         {
-            ConnectionString = connectionString;
+            _connectionString = connectionString;
         }
 
         public DataContextCore(IContextConfiguration config)
         {
-            ConnectionString = config.GetConnectionString();
+            _connectionString = config.GetConnectionString();
+            _config = config;
         }
 
         private async Task<IEnumerable<T>> ExecuteCollectionReader<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
         {
-            try
+            using (var sqlConnection = await CreateAndOpenSqlConnection())
             {
-                using (var sqlConnection = await CreateAndOpenSqlConnection())
-                { 
-                    using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
+                using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
+                {
+                    using (var sqlDataReader = await sqlCommand.ExecuteReaderAsync())
                     {
-                        using (var sqlDataReader = await sqlCommand.ExecuteReaderAsync())
-                        {
-                            return await DataReader.MapDataToObjectCollection<T, DbDataReader>(sqlDataReader);
-                        }
+                        return await DataReader.MapDataToObjectCollection<T, DbDataReader>(sqlDataReader);
                     }
                 }
             }
-            catch (Exception ex)
-            {
-            }
-
-            return null;
         }
 
+        private async Task<IEnumerable<T>> ExecuteCollectionReaderWrapper<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            var policy = _config?.GetPolicy<IEnumerable<T>>();
+
+            if (policy != null)
+                return await policy.ExecuteAsync(() => ExecuteCollectionReader<T>(query, commandType, parameters));
+            else
+                return await ExecuteCollectionReader<T>(query, commandType, parameters);
+
+        }
 
         private async Task<T> ExecuteReader<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
         {
-            try
+            using (var sqlConnection = await CreateAndOpenSqlConnection())
             {
-                using (var sqlConnection = await CreateAndOpenSqlConnection())
+                using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
                 {
-                    using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
+                    using (var sqlDataReader = await sqlCommand.ExecuteReaderAsync())
                     {
-                        using (var sqlDataReader = await sqlCommand.ExecuteReaderAsync())
-                        {
-                            return await DataReader.MapDataToObject<T, DbDataReader>(sqlDataReader);
-                        }
+                        return await DataReader.MapDataToObject<T, DbDataReader>(sqlDataReader);
                     }
                 }
             }
-            catch (Exception ex)
-            {
-            }
+        }
+        private async Task<T> ExecuteReaderWrapper<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            var policy = _config?.GetPolicy<T>();
 
-            return default(T);
+            if (policy != null)
+                return await policy.ExecuteAsync(() => ExecuteReader<T>(query, commandType, parameters));
+            else
+                return await ExecuteReader<T>(query, commandType, parameters);
         }
 
         private async Task<T> ExecuteScalar<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
         {
-            try
+            using (var sqlConnection = await CreateAndOpenSqlConnection())
             {
-                using (var sqlConnection = await CreateAndOpenSqlConnection())
+                using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
                 {
-                    using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
-                    {
-                        var result = await sqlCommand.ExecuteScalarAsync();
-                        return result.MapDataToObject<T>();
-
-                    }
+                    var result = await sqlCommand.ExecuteScalarAsync();
+                    return result.MapDataToObject<T>();
                 }
             }
-            catch (Exception ex)
-            {
-            }
+        }
+        private async Task<T> ExecuteScalarWrapper<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            var policy = _config?.GetPolicy<T>();
 
-            return default(T);
+            if (policy != null)
+                return await policy.ExecuteAsync(() => ExecuteScalar<T>(query, commandType, parameters));
+            else
+                return await ExecuteScalar<T>(query, commandType, parameters);
         }
 
+        private async Task<int> ExecuteNonQuery(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            using (var sqlConnection = await CreateAndOpenSqlConnection())
+            {
+                using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
+                {
+                    return await sqlCommand.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
+        private async Task<int> ExecuteNonQueryWrapper(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            var policy = _config?.GetPolicy<int>();
+
+            if (policy != null)
+                return await policy.ExecuteAsync(() => ExecuteNonQuery(query, commandType, parameters));
+            else
+                return await ExecuteNonQuery(query, commandType, parameters);
+        }
+
+
         #region Overrides
+        public async Task<int> ExecuteNonQuery(string query)
+        {
+            return await ExecuteNonQueryWrapper(query, CommandType.Text);
+        }
+
+        public async Task<int> ExecuteStoredProcedureNonQuery(string query, params KeyValuePair<string, object>[] parameters)
+        {
+            return await ExecuteNonQueryWrapper(query, CommandType.StoredProcedure, parameters);
+        }
+
         public async Task<T> ExecuteStoredProcedureScalar<T>(string query, params KeyValuePair<string, object>[] parameters)
         {
-            return await ExecuteScalar<T>(query, CommandType.StoredProcedure, parameters);
+            return await ExecuteScalarWrapper<T>(query, CommandType.StoredProcedure, parameters);
         }
 
         public async Task<T> ExecuteScalar<T>(string query)
         {
-            return await ExecuteScalar<T>(query, CommandType.Text);
+            return await ExecuteScalarWrapper<T>(query, CommandType.Text);
         }
 
         public async Task<T> ExecuteReader<T>(string query)
         {
-            return await ExecuteReader<T>(query, CommandType.Text);
+            return await ExecuteReaderWrapper<T>(query, CommandType.Text);
         }
 
         public async Task<T> ExecuteStoredProcedureReader<T>(string query, params KeyValuePair<string, object>[] parameters)
         {
-            return await ExecuteReader<T>(query, CommandType.StoredProcedure, parameters);
+            return await ExecuteReaderWrapper<T>(query, CommandType.StoredProcedure, parameters);
         }
 
         public async Task<IEnumerable<T>> ExecuteCollectionReader<T>(string query)
         {
-            return await ExecuteCollectionReader<T>(query, CommandType.Text);
+            return await ExecuteCollectionReaderWrapper<T>(query, CommandType.Text);
         }
 
         public async Task<IEnumerable<T>> ExecuteStoredProcedureCollectionReader<T>(string query, params KeyValuePair<string, object>[] parameters)
         {
-            return await ExecuteCollectionReader<T>(query, CommandType.StoredProcedure, parameters);
+            return await ExecuteCollectionReaderWrapper<T>(query, CommandType.StoredProcedure, parameters);
         }
 
         #endregion
 
         private async Task<TConnection> CreateAndOpenSqlConnection()
         {
-            var connection = (TConnection)Activator.CreateInstance(typeof(TConnection), ConnectionString);
+            var connection = (TConnection)Activator.CreateInstance(typeof(TConnection), _connectionString);
 
             await connection.OpenAsync();
 

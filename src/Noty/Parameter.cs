@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Noty.SqlServer
+namespace Noty
 {
     public static class Parameter
     {

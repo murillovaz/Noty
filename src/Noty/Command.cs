@@ -5,7 +5,7 @@ using System.Data.Common;
 using System.Data.SqlClient;
 using System.Text;
 
-namespace Noty.SqlServer
+namespace Noty
 {
     public static class Command
     {
