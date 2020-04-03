@@ -27,17 +27,25 @@ namespace Products.API.Controllers
         [HttpGet]
         public async Task<IActionResult> Get()
         {
-            var valuesSqlServerNonQuery = await _ctx.ExecuteStoredProcedureNonQuery("Products_Insert", 
-                "name".WithValue("Banana Nanica"),
-                "price".WithValue(100.00)
-                );
+            //var valuesSqlServerNonQuery = await _ctx.ExecuteStoredProcedureNonQuery("Products_Insert", 
+            //    "name".WithValue("Banana Nanica"),
+            //    "price".WithValue(100.00)
+            //    );
 
-            var valuesSqlServer = await _ctx.ExecuteStoredProcedureCollectionReader<Product>("Products_Get", 
+            var valuesSqlServer = await _ctx.ExecuteStoredProcedureCollectionReader<Product>("Products_Get",
                 "@id".WithValue(1));
 
-            var valuesMySql = await _ctxMysql.ExecuteStoredProcedureCollectionReader<Product>("Products_Get", "v_id".WithValue(1));
+            var valuesSqlServerReader = await _ctxMysql.ExecuteReader("SELECT * FROM Products", async (dataReader) =>
+            {
 
-            return Ok(JsonConvert.SerializeObject(new { valuesMySql = valuesMySql, valuesSqlServer = valuesSqlServer, valuesSqlServerNonQuery = valuesSqlServerNonQuery }, Formatting.Indented));
+                await _ctx.ExecuteBulkyInsert("dbo.ProductsCopied", dataReader);
+
+                return true;
+            });
+
+            string valuesMySql = null;/* await _ctxMysql.ExecuteStoredProcedureCollectionReader<Product>("Products_Get", "v_id".WithValue(1));*/
+
+            return Ok(JsonConvert.SerializeObject(new { valuesMySql = valuesMySql, valuesSqlServer = valuesSqlServer }, Formatting.Indented));
         }
     }
 }

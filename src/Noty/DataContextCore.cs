@@ -5,17 +5,19 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Data.SqlClient;
 using System.Threading.Tasks;
 
 
 namespace Noty
 {
-    public class DataContextCore<TCommand, TConnection, TDataReader> where TCommand : DbCommand where TConnection : DbConnection where TDataReader : DbDataReader
+    public class DataContextCore<TCommand, TConnection, TDataReader> where TCommand : DbCommand
+                                                                    where TConnection : DbConnection
+                                                                    where TDataReader : DbDataReader
     {
-        private readonly string _connectionString;
+        protected readonly string _connectionString;
 
-        private readonly IContextConfiguration _config;
-
+        protected readonly IContextConfiguration _config;
 
         public DataContextCore(string connectionString)
         {
@@ -26,6 +28,29 @@ namespace Noty
         {
             _connectionString = config.GetConnectionString();
             _config = config;
+        }
+
+        private async Task<bool> ExecuteReader(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters, Func<TDataReader, Task<bool>> func)
+        {
+            using (var sqlConnection = await CreateAndOpenSqlConnection())
+            {
+                using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
+                {
+                    using (var sqlDataReader = await sqlCommand.ExecuteReaderAsync())
+                    {
+                        return await func((TDataReader)sqlDataReader);
+                    }
+                }
+            }
+        }
+        private async Task<bool> ExecuteReaderWrapper(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters, Func<TDataReader, Task<bool>> func)
+        {
+            var policy = _config?.GetPolicy<bool>();
+
+            if (policy != null)
+                return await policy.ExecuteAsync(() => ExecuteReader(query, commandType, parameters, func));
+            else
+                return await ExecuteReader(query, commandType, parameters, func);
         }
 
         private async Task<IEnumerable<T>> ExecuteCollectionReader<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
@@ -50,7 +75,6 @@ namespace Noty
                 return await policy.ExecuteAsync(() => ExecuteCollectionReader<T>(query, commandType, parameters));
             else
                 return await ExecuteCollectionReader<T>(query, commandType, parameters);
-
         }
 
         private async Task<T> ExecuteReader<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
@@ -120,6 +144,28 @@ namespace Noty
 
 
         #region Overrides
+
+        public async Task<bool> ExecuteStoredProcedureReader(string query, IEnumerable<KeyValuePair<string, object>> parameters, Func<TDataReader, Task<bool>> func)
+        {
+            return await ExecuteReaderWrapper(query, CommandType.StoredProcedure, parameters, func);
+        }
+
+        public async Task<bool> ExecuteStoredProcedureReader(string query, Func<TDataReader, Task<bool>> func, params KeyValuePair<string, object>[] parameters)
+        {
+            return await ExecuteReaderWrapper(query, CommandType.StoredProcedure, parameters, func);
+        }
+
+        public async Task<bool> ExecuteStoredProcedureReader(string query, Func<TDataReader, Task<bool>> func)
+        {
+            return await ExecuteReaderWrapper(query, CommandType.StoredProcedure, null, func);
+        }
+
+        public async Task<bool> ExecuteReader(string query, Func<TDataReader, Task<bool>> func)
+        {
+            return await ExecuteReaderWrapper(query, CommandType.Text, null, func);
+        }
+
+
         public async Task<int> ExecuteNonQuery(string query)
         {
             return await ExecuteNonQueryWrapper(query, CommandType.Text);
@@ -162,7 +208,7 @@ namespace Noty
 
         #endregion
 
-        private async Task<TConnection> CreateAndOpenSqlConnection()
+        protected async Task<TConnection> CreateAndOpenSqlConnection()
         {
             var connection = (TConnection)Activator.CreateInstance(typeof(TConnection), _connectionString);
 
