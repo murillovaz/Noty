@@ -8,9 +8,10 @@ using System.Threading.Tasks;
 
 namespace Noty
 {
-    public class DataContextCore<TCommand, TConnection, TDataReader> where TCommand : DbCommand
+    public class DataContextCore<TCommand, TConnection, TDataReader, TDataAdapter> where TCommand : DbCommand
                                                                     where TConnection : DbConnection
                                                                     where TDataReader : DbDataReader
+                                                                    where TDataAdapter : DbDataAdapter
     {
         protected readonly string _connectionString;
 
@@ -27,6 +28,30 @@ namespace Noty
             _config = config;
         }
 
+        private async Task<DataTable> ExecuteDataTable<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            using (var sqlConnection = await CreateAndOpenSqlConnection())
+            {
+                using (var sqlCommand = Command.CreateCommand<TConnection, TCommand>(sqlConnection, query, commandType, parameters))
+                {
+                    var dtAdapter = (TDataAdapter)Activator.CreateInstance(typeof(TDataAdapter), sqlCommand);
+                    DataTable dt = new DataTable();
+                    dtAdapter.Fill(dt);
+                    return dt;
+                }
+            }
+        }
+
+        private async Task<DataTable> ExecuteDataTableWrapper<T>(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters = null)
+        {
+            var policy = _config?.GetPolicy<DataTable>();
+
+            if (policy != null)
+                return await policy.ExecuteAsync(() => ExecuteDataTable<T>(query, commandType, parameters));
+            else
+                return await ExecuteDataTable<T>(query, commandType, parameters);
+        }
+
         private async Task<bool> ExecuteReader(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters, Func<TDataReader, Task<bool>> func)
         {
             using (var sqlConnection = await CreateAndOpenSqlConnection())
@@ -40,6 +65,7 @@ namespace Noty
                 }
             }
         }
+
         private async Task<bool> ExecuteReaderWrapper(string query, CommandType commandType, IEnumerable<KeyValuePair<string, object>> parameters, Func<TDataReader, Task<bool>> func)
         {
             var policy = _config?.GetPolicy<bool>();
@@ -201,6 +227,15 @@ namespace Noty
         public async Task<IEnumerable<T>> ExecuteStoredProcedureCollectionReader<T>(string query, params KeyValuePair<string, object>[] parameters)
         {
             return await ExecuteCollectionReaderWrapper<T>(query, CommandType.StoredProcedure, parameters);
+        }
+
+        public async Task<DataTable> ExecuteDataTable<T>(string query)
+        {
+            return await ExecuteDataTableWrapper<T>(query, CommandType.Text);
+        }
+        public async Task<DataTable> ExecuteStoredProcedureDataTable<T>(string query, params KeyValuePair<string, object>[] parameters)
+        {
+            return await ExecuteDataTableWrapper<T>(query, CommandType.StoredProcedure, parameters);
         }
 
         #endregion

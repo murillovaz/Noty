@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Noty.SqlServer
 {
-    public class SqlServerContext : DataContextCore<SqlCommand, SqlConnection, SqlDataReader>
+    public class SqlServerContext : DataContextCore<SqlCommand, SqlConnection, SqlDataReader, SqlDataAdapter>
     {
         public SqlServerContext(string connectionString) : base(connectionString)
         {

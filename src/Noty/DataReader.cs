@@ -1,6 +1,8 @@
-﻿using System;
+﻿using FastMember;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
 using System.Linq;
@@ -48,6 +50,42 @@ namespace Noty
             }
 
             return newObject;
+        }
+
+        public static async Task<DataTable> MapDataToDataTable<T, T2>(this T2 dataReader) where T2 : DbDataReader
+        {
+            var objectMemberAccessor = FastMember.TypeAccessor.Create(typeof(T));
+
+            var members =
+                    objectMemberAccessor
+                    .GetMembers().ToList();
+
+            var membersNameHashSet = members.Select(x => x.Name).ToHashSet();
+
+            DataTable dt = new DataTable();
+
+            members.ForEach(x => { dt.Columns.Add(x.Name, x.Type); });
+
+            string objectPropertyName = null;
+            DataRow newRow = null;
+
+            while (await dataReader.ReadAsync())
+            {
+                newRow = dt.NewRow();
+
+                for (int i = 0; i < dataReader.FieldCount; i++)
+                {
+                    objectPropertyName = membersNameHashSet.FirstOrDefault(x => x.Equals(dataReader.GetName(i), StringComparison.OrdinalIgnoreCase));
+
+                    if (objectPropertyName != null)
+                    {
+                        newRow[objectPropertyName]
+                            = dataReader.IsDBNull(i) ? null : dataReader.GetValue(i);
+                    }
+                }
+            }
+
+            return dt;
         }
 
         public static async Task<IEnumerable<T>> MapDataToObjectCollection<T, T2>(this T2 dataReader) where T2 : DbDataReader
