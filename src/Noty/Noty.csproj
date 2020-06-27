@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <PackageId>Noty</PackageId>
+    <Version>1.0.0-alpha</Version>
+    <Authors>Murillo Vaz</Authors>
   </PropertyGroup>
 
   <ItemGroup>

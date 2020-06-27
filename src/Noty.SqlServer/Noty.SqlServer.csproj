@@ -2,10 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+	<PackageId>Noty.SqlServer</PackageId>
+    <Version>1.0.0-alpha</Version>
+    <Authors>Murillo Vaz</Authors>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Noty\Noty.csproj" />
+    <PackageReference Include="Noty" Version="1.0.0-alpha" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
   </ItemGroup>
 
