@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Noty" Version="1.0.0-alpha" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
   </ItemGroup>
 
 </Project>
